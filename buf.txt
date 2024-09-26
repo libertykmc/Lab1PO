@@ -1,0 +1,135 @@
+using Npgsql;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace Lab1
+{
+    public partial class Form1 : Form
+    {
+        private string connectionString;
+
+        private DataSet dataSet;
+
+        private NpgsqlDataAdapter clientAdapter;
+        private NpgsqlCommandBuilder clientBuilder;
+
+        private NpgsqlDataAdapter serviceAdapter;
+        private NpgsqlCommandBuilder serviceBuilder;
+
+        private NpgsqlDataAdapter serviceCategoryAdapter;
+        private NpgsqlCommandBuilder serviceCategoryBuilder;
+
+        public Form1()
+        {
+            InitializeComponent();
+
+            dataSet = new DataSet();
+            connectionString = System.Configuration.ConfigurationManager.ConnectionStrings["Db"].ConnectionString;
+
+            clientAdapter = new NpgsqlDataAdapter("select * from client order by client.id asc;", connectionString);
+            clientAdapter.Fill(dataSet, "client");
+            clientBuilder = new NpgsqlCommandBuilder(clientAdapter);
+            dataGridViewClients.DataSource = dataSet.Tables["client"];
+
+            serviceCategoryAdapter = new NpgsqlDataAdapter("select * from service_category order by service_category.id asc;", connectionString);
+            serviceCategoryAdapter.Fill(dataSet, "serviceCategory");
+            serviceCategoryBuilder = new NpgsqlCommandBuilder(serviceCategoryAdapter);
+            FillServiceCategoryComboBox();
+
+            serviceAdapter = new NpgsqlDataAdapter("select * from service order by service.id asc;", connectionString);
+            serviceAdapter.Fill(dataSet, "service");
+            serviceBuilder = new NpgsqlCommandBuilder(serviceAdapter);
+            dataGridViewService.DataSource = dataSet.Tables["service"];
+        }
+
+        private void FillServiceCategoryComboBox()
+        {
+            DataGridViewComboBoxColumn comboBox = (DataGridViewComboBoxColumn)dataGridViewService.Columns["ServiceCategoryCol"];
+                
+            comboBox.DataSource = dataSet.Tables["serviceCategory"];
+            comboBox.DisplayMember = "name";
+            comboBox.ValueMember = "id";
+
+            Report2CategorySelect.DataSource = dataSet.Tables["serviceCategory"];
+            Report2CategorySelect.DisplayMember = "name";
+            Report2CategorySelect.ValueMember = "id";
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                clientAdapter.Update(dataSet, "client");
+                MessageBox.Show(this, "Changes saved successfully");
+            }
+            catch
+            {
+                MessageBox.Show(this, "Something went wrong");
+            }
+        }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                serviceAdapter.Update(dataSet, "service");
+                MessageBox.Show(this, "Changes saved successfully");
+            }
+            catch
+            {
+                MessageBox.Show(this, "Something went wrong");
+            }
+        }
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            using (NpgsqlConnection sqlConnection = new NpgsqlConnection(connectionString))
+            {
+                NpgsqlCommand sqlCommand = new NpgsqlCommand("select * from get_clients_by_birth_year($1)", sqlConnection)
+                {
+                    Parameters =
+                    {
+                        new NpgsqlParameter(){Value = (int)Report1YearInput.Value},
+                    }
+                };
+                sqlConnection.Open();
+
+                var sqlAdapter = new NpgsqlDataAdapter(sqlCommand);
+
+                DataTable dataTable = new DataTable("report1");
+                sqlAdapter.Fill(dataTable);
+
+                dataGridViewReport1.DataSource = dataTable;
+            }
+        }
+
+        private void button4_Click(object sender, EventArgs e)
+        {
+            using (NpgsqlConnection sqlConnection = new NpgsqlConnection(connectionString))
+            {
+                sqlConnection.Open();
+                NpgsqlCommand sqlCommand = new NpgsqlCommand("select * from service where service_category_id = " + Report2CategorySelect.SelectedValue, sqlConnection);
+                NpgsqlDataReader sqlDataReader = sqlCommand.ExecuteReader();
+                DataTable dataTable = new DataTable("report2");
+                dataTable.Columns.Add("Name");
+                dataTable.Columns.Add("Class cost");
+                while (sqlDataReader.Read())
+                {
+                    DataRow row = dataTable.NewRow();
+                    row["Name"] = sqlDataReader["name"];
+                    row["Class cost"] = sqlDataReader["class_cost"];
+                    dataTable.Rows.Add(row);
+                }
+                sqlDataReader.Close();
+                dataGridViewReport2.DataSource = dataTable;
+            }
+        }
+    }
+}
